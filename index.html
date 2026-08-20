@@ -692,9 +692,11 @@
     if (!settings.categories.includes(currentFilter) && currentFilter !== 'All') currentFilter = 'All';
 
     const catList = document.getElementById('bv-category-list');
-    catList.innerHTML = settings.categories.map(function(c) {
-      return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--blush);border-radius:999px;padding:5px 6px 5px 12px;font-size:12.5px;font-weight:600;">' +
-        escapeHtml(c) +
+    catList.innerHTML = settings.categories.map(function(c, idx) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--blush);border-radius:999px;padding:5px 6px 5px 12px;font-size:12.5px;font-weight:600;">' +
+        (idx > 0 ? '<button data-move-cat-up="' + escapeHtml(c) + '" title="Move left" style="border:none;background:rgba(0,0,0,0.12);border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;line-height:1;">&#8592;</button>' : '') +
+        (idx < settings.categories.length - 1 ? '<button data-move-cat-down="' + escapeHtml(c) + '" title="Move right" style="border:none;background:rgba(0,0,0,0.12);border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;line-height:1;">&#8594;</button>' : '') +
+        '<span>' + escapeHtml(c) + '</span>' +
         '<button data-remove-category="' + escapeHtml(c) + '" style="border:none;background:rgba(0,0,0,0.12);border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;line-height:1;">&times;</button>' +
       '</span>';
     }).join('');
@@ -938,6 +940,32 @@
       saveSettings();
       render();
       showToast('Category removed');
+      return;
+    }
+
+    const moveUpBtn = e.target.closest('[data-move-cat-up]');
+    if (moveUpBtn) {
+      const cat = moveUpBtn.dataset.moveCatUp;
+      const idx = settings.categories.indexOf(cat);
+      if (idx > 0) {
+        const arr = settings.categories;
+        [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+        saveSettings();
+        render();
+      }
+      return;
+    }
+
+    const moveDownBtn = e.target.closest('[data-move-cat-down]');
+    if (moveDownBtn) {
+      const cat = moveDownBtn.dataset.moveCatDown;
+      const idx = settings.categories.indexOf(cat);
+      if (idx > -1 && idx < settings.categories.length - 1) {
+        const arr = settings.categories;
+        [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+        saveSettings();
+        render();
+      }
       return;
     }
   });
