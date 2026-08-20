@@ -486,11 +486,9 @@
       </div>
 
       <div class="bv-panel">
-        <p class="bv-panel-title">Manage PIN</p>
-        <div class="bv-field" style="margin-bottom:0;">
-          <label>Set a simple PIN so only you can open Manage (basic protection, not high security)</label>
-          <input type="text" id="bv-admin-pin" placeholder="e.g. 4821">
-        </div>
+        <p class="bv-panel-title">Admin access</p>
+        <p id="bv-admin-status" style="font-size:13px;opacity:0.75;"></p>
+        <button type="button" id="bv-logout-btn" class="bv-submit" style="background:#d9d2c0;color:var(--ink);display:none;">Log out</button>
       </div>
 
       <div class="bv-panel">
@@ -540,7 +538,7 @@
 
   let products = [];
   let orders = [];
-  let settings = { whatsapp: '', pin: '', categories: ["Kids' Essentials", "Party Packs & Souvenirs", "Gifts"] };
+  let settings = { whatsapp: '', categories: ["Kids' Essentials", "Party Packs & Souvenirs", "Gifts"] };
   let manageUnlocked = false;
   let currentFilter = 'All';
   let pendingImageUrl = '';
@@ -616,7 +614,6 @@
   async function saveSettings() {
     const { error } = await sb.from('shop_settings').update({
       whatsapp: settings.whatsapp,
-      pin: settings.pin,
       categories: settings.categories
     }).eq('id', 1);
     if (error) showToast('Could not save — try again');
@@ -672,7 +669,13 @@
     manageGrid.innerHTML = products.map(function(p) { return productCardHtml(p, true); }).join('');
 
     document.getElementById('bv-admin-whatsapp').value = settings.whatsapp || '';
-    document.getElementById('bv-admin-pin').value = settings.pin || '';
+
+    const statusEl = document.getElementById('bv-admin-status');
+    const logoutBtn = document.getElementById('bv-logout-btn');
+    if (statusEl) {
+      statusEl.textContent = manageUnlocked ? 'Logged in as admin.' : 'Not logged in.';
+      logoutBtn.style.display = manageUnlocked ? 'inline-block' : 'none';
+    }
 
     const catSelect = document.getElementById('bv-p-category');
     const prevSelected = catSelect.value;
@@ -722,6 +725,40 @@
         '</div>'
       );
     }).join('');
+  }
+
+  function openLoginModal() {
+    const root = document.getElementById('bv-modal-root');
+    root.innerHTML =
+      '<div class="bv-modal-backdrop" id="bv-modal-backdrop">' +
+        '<div class="bv-modal">' +
+          '<button class="bv-modal-close" id="bv-modal-close">&times;</button>' +
+          '<p class="bv-panel-title bv-font-display">Admin login</p>' +
+          '<form id="bv-login-form">' +
+            '<div class="bv-field"><label>Email</label><input type="email" id="bv-login-email" required></div>' +
+            '<div class="bv-field"><label>Password</label><input type="password" id="bv-login-password" required></div>' +
+            '<button type="submit" class="bv-submit" id="bv-login-submit">Log in</button>' +
+          '</form>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('bv-modal-close').onclick = closeModal;
+    document.getElementById('bv-modal-backdrop').onclick = function(e) {
+      if (e.target.id === 'bv-modal-backdrop') closeModal();
+    };
+    document.getElementById('bv-login-form').onsubmit = async function(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('bv-login-submit');
+      submitBtn.disabled = true;
+      const email = document.getElementById('bv-login-email').value;
+      const password = document.getElementById('bv-login-password').value;
+      const { error } = await sb.auth.signInWithPassword({ email: email, password: password });
+      submitBtn.disabled = false;
+      if (error) { showToast('Login failed — check email/password'); return; }
+      manageUnlocked = true;
+      closeModal();
+      await loadAll();
+      switchView('manage');
+    };
   }
 
   function openOrderModal(prod) {
@@ -825,13 +862,9 @@
   document.getElementById('bv-shop-root').addEventListener('click', function(e) {
     const navBtn = e.target.closest('.bv-nav-btn');
     if (navBtn && navBtn.dataset.view) {
-      if (navBtn.dataset.view === 'manage' && settings.pin && !manageUnlocked) {
-        const entered = window.prompt('Enter Manage PIN:');
-        if (entered !== settings.pin) {
-          if (entered !== null) showToast('Incorrect PIN');
-          return;
-        }
-        manageUnlocked = true;
+      if (navBtn.dataset.view === 'manage' && !manageUnlocked) {
+        openLoginModal();
+        return;
       }
       switchView(navBtn.dataset.view);
       return;
@@ -1063,13 +1096,19 @@
     if (e.key === 'Enter') { e.preventDefault(); addCategory(); }
   });
 
-  document.getElementById('bv-admin-pin').addEventListener('change', function(e) {
-    settings.pin = e.target.value.trim();
-    saveSettings();
-    showToast(settings.pin ? 'PIN set' : 'PIN removed');
+  document.getElementById('bv-logout-btn').addEventListener('click', async function() {
+    await sb.auth.signOut();
+    manageUnlocked = false;
+    switchView('shop');
+    render();
+    showToast('Logged out');
   });
 
-  loadAll();
+  (async function init() {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) manageUnlocked = true;
+    loadAll();
+  })();
 })();
 </script>
 </body>
